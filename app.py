@@ -8,22 +8,19 @@ import uuid
 from datetime import datetime, timedelta
 import pdfkit
 from faker import Faker
-from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)
 app.secret_key = 'your-secret-key-here'
 
 # Configuration
-UPLOAD_FOLDER = 'static/uploads'
+UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Create uploads directory if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# Mock database
+# Mock database (in a real app, use a proper database)
 db = {
     'users': {
         'admin': {
@@ -56,7 +53,7 @@ if not db['rooms']:
             'description': fake.sentence(),
             'amenities': ', '.join(fake.words(5)),
             'status': 'available',
-            'image': f'https://raw.githubusercontent.com/Divyajeet7978/Hotel_Management/main/images/{fake.random_element(room_types)}.png'
+            'image': f'/static/room_{fake.random_int(1, 5)}.jpg'  # Mock image path
         })
 
 if not db['customers']:
@@ -145,6 +142,7 @@ def dashboard():
     
     recent_bookings = sorted(db['bookings'], key=lambda x: x['created_at'], reverse=True)[:5]
     
+    # Add room and customer details to each booking
     detailed_bookings = []
     for booking in recent_bookings:
         room = next((r for r in db['rooms'] if r['id'] == booking['room_id']), None)
@@ -163,86 +161,56 @@ def dashboard():
             'active_bookings': active_bookings,
             'total_customers': total_customers
         },
-        'recent_bookings': detailed_bookings
+        'recent_bookings': detailed_bookings  # Return the detailed bookings
     })
 
-@app.route('/api/rooms', methods=['GET', 'POST'])
+@app.route('/api/rooms', methods=['GET'])
 @login_required
-def manage_rooms():
-    if request.method == 'GET':
-        search = request.args.get('search', '')
-        room_type = request.args.get('type', '')
-        status = request.args.get('status', '')
-        
-        filtered_rooms = db['rooms']
-        
-        if search:
-            filtered_rooms = [r for r in filtered_rooms if search.lower() in r['number'].lower() or search.lower() in r['type'].lower()]
-        
-        if room_type:
-            filtered_rooms = [r for r in filtered_rooms if r['type'].lower() == room_type.lower()]
-        
-        if status:
-            filtered_rooms = [r for r in filtered_rooms if r['status'].lower() == status.lower()]
-        
-        return jsonify({'rooms': filtered_rooms})
+def get_rooms():
+    search = request.args.get('search', '')
+    room_type = request.args.get('type', '')
+    status = request.args.get('status', '')
     
-    elif request.method == 'POST':
-        image_url = 'https://raw.githubusercontent.com/Divyajeet7978/Hotel_Management/main/images/Standard.png'
-        
-        if 'image' in request.files:
-            file = request.files['image']
-            if file and allowed_file(file.filename):
-                filename = secure_filename(f"room_{uuid.uuid4().hex}.{file.filename.rsplit('.', 1)[1].lower()}")
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-                image_url = f'/static/uploads/{filename}'
-        
-        data = request.form
-        
-        required_fields = ['number', 'type', 'price', 'capacity']
-        if not all(field in data for field in required_fields):
-            return jsonify({'success': False, 'message': 'Missing required fields'}), 400
-        
-        new_room = {
-            'id': len(db['rooms']) + 1,
-            'number': data['number'],
-            'type': data['type'],
-            'price': float(data['price']),
-            'capacity': int(data['capacity']),
-            'description': data.get('description', ''),
-            'amenities': data.get('amenities', ''),
-            'status': 'available',
-            'image': image_url
-        }
-        
-        db['rooms'].append(new_room)
-        return jsonify({'success': True, 'room': new_room}), 201
+    filtered_rooms = db['rooms']
+    
+    if search:
+        filtered_rooms = [r for r in filtered_rooms if search.lower() in r['number'].lower() or search.lower() in r['type'].lower()]
+    
+    if room_type:
+        filtered_rooms = [r for r in filtered_rooms if r['type'].lower() == room_type.lower()]
+    
+    if status:
+        filtered_rooms = [r for r in filtered_rooms if r['status'].lower() == status.lower()]
+    
+    return jsonify({'rooms': filtered_rooms})
 
-@app.route('/api/rooms/<int:room_id>', methods=['GET', 'DELETE'])
+@app.route('/api/rooms/<int:room_id>', methods=['GET'])
 @login_required
-def manage_room(room_id):
-    if request.method == 'GET':
-        room = next((r for r in db['rooms'] if r['id'] == room_id), None)
-        if not room:
-            return jsonify({'message': 'Room not found'}), 404
-        return jsonify(room)
+def get_room(room_id):
+    room = next((r for r in db['rooms'] if r['id'] == room_id), None)
+    if not room:
+        return jsonify({'message': 'Room not found'}), 404
+    return jsonify(room)
     
-    elif request.method == 'DELETE':
-        room = next((r for r in db['rooms'] if r['id'] == room_id), None)
-        if not room:
-            return jsonify({'success': False, 'message': 'Room not found'}), 404
-        
-        active_bookings = [b for b in db['bookings'] 
-                          if b['room_id'] == room_id and b['status'] == 'active']
-        
-        if active_bookings:
-            return jsonify({
-                'success': False,
-                'message': 'Cannot delete room with active bookings'
-            }), 400
-        
-        db['rooms'] = [r for r in db['rooms'] if r['id'] != room_id]
-        return jsonify({'success': True, 'message': 'Room deleted successfully'})
+@app.route('/api/bookings/<booking_id>', methods=['GET'])
+@login_required
+def get_booking(booking_id):
+    booking = next((b for b in db['bookings'] if b['id'] == booking_id), None)
+    if not booking:
+        return jsonify({'message': 'Booking not found'}), 404
+    
+    # Add room and customer details
+    room = next((r for r in db['rooms'] if r['id'] == booking['room_id']), None)
+    customer = next((c for c in db['customers'] if c['id'] == booking['customer_id']), None)
+    
+    if not room or not customer:
+        return jsonify({'message': 'Room or customer not found'}), 404
+    
+    detailed_booking = booking.copy()
+    detailed_booking['room'] = room
+    detailed_booking['customer'] = customer
+    
+    return jsonify(detailed_booking)
 
 @app.route('/api/bookings', methods=['GET', 'POST'])
 @login_required
@@ -259,6 +227,7 @@ def manage_bookings():
         if search:
             bookings = [b for b in bookings if search.lower() in b['id'].lower()]
         
+        # Add room and customer details to each booking
         detailed_bookings = []
         for booking in bookings:
             room = next((r for r in db['rooms'] if r['id'] == booking['room_id']), None)
@@ -287,6 +256,7 @@ def manage_bookings():
         if not customer:
             return jsonify({'success': False, 'message': 'Customer not found'}), 404
         
+        # Check if room is available for the dates
         check_in = datetime.strptime(data['check_in'], '%Y-%m-%d').date()
         check_out = datetime.strptime(data['check_out'], '%Y-%m-%d').date()
         
@@ -303,6 +273,7 @@ def manage_bookings():
                 'message': 'Room is already booked for the selected dates'
             }), 400
         
+        # Create booking
         booking_id = str(uuid.uuid4())
         days = (check_out - check_in).days
         total_amount = room['price'] * days
@@ -320,31 +291,14 @@ def manage_bookings():
         }
         
         db['bookings'].append(new_booking)
+        
+        # Update room status
         room['status'] = 'booked'
         
         return jsonify({
             'success': True,
             'booking': new_booking
         }), 201
-
-@app.route('/api/bookings/<booking_id>', methods=['GET'])
-@login_required
-def get_booking(booking_id):
-    booking = next((b for b in db['bookings'] if b['id'] == booking_id), None)
-    if not booking:
-        return jsonify({'message': 'Booking not found'}), 404
-    
-    room = next((r for r in db['rooms'] if r['id'] == booking['room_id']), None)
-    customer = next((c for c in db['customers'] if c['id'] == booking['customer_id']), None)
-    
-    if not room or not customer:
-        return jsonify({'message': 'Room or customer not found'}), 404
-    
-    detailed_booking = booking.copy()
-    detailed_booking['room'] = room
-    detailed_booking['customer'] = customer
-    
-    return jsonify(detailed_booking)
 
 @app.route('/api/bookings/<booking_id>/checkout', methods=['POST'])
 @login_required
@@ -356,9 +310,11 @@ def checkout_booking(booking_id):
     if booking['status'] == 'completed':
         return jsonify({'success': False, 'message': 'Booking already completed'}), 400
     
+    # Update booking status
     booking['status'] = 'completed'
     booking['payment_status'] = 'paid'
     
+    # Update room status
     room = next((r for r in db['rooms'] if r['id'] == booking['room_id']), None)
     if room:
         room['status'] = 'available'
@@ -417,6 +373,7 @@ def generate_invoice(booking_id):
     if not room or not customer:
         return jsonify({'message': 'Room or customer not found'}), 404
     
+    # Generate HTML for the invoice
     invoice_html = f"""
     <!DOCTYPE html>
     <html>
@@ -490,6 +447,7 @@ def generate_invoice(booking_id):
     </html>
     """
     
+    # Generate PDF from HTML
     try:
         pdf = pdfkit.from_string(invoice_html, False)
         response = make_response(pdf)
@@ -499,9 +457,12 @@ def generate_invoice(booking_id):
     except Exception as e:
         return jsonify({'message': f'Failed to generate PDF: {str(e)}'}), 500
 
-@app.route('/static/uploads/<filename>')
-def serve_uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+# Static files (for room images)
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    # In a real app, you would serve actual image files
+    # This is just a mock endpoint
+    return send_from_directory('static', filename)
 
 if __name__ == '__main__':
     app.run(debug=True)
