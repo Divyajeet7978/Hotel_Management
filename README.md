@@ -1,9 +1,8 @@
-markdown
 # Hotel Management System
 
 A full-stack hotel management application with Flask backend and HTML/CSS/JS frontend.
 
-![Screenshot](screenshot.png) <!-- Add a screenshot if available -->
+![Screenshot](https://github.com/Divyajeet7978/Hotel_Management/blob/main/images/ss.png) 
 
 ## Features
 
