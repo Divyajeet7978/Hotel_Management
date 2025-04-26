@@ -110,23 +110,3 @@ If you get errors about wkhtmltopdf:
 
 ### Database Reset
 The application uses an in-memory database that resets when the server restarts. To repopulate with sample data, simply restart the Flask server.
-
-## License
-
-[MIT License](LICENSE)
-
-
-### Key Notes:
-1. Removed all Vercel/Netlify specific instructions
-2. Focused on local development setup
-3. Included detailed installation steps for wkhtmltopdf
-4. Added troubleshooting section for common issues
-5. Kept the project structure clean and simple
-
-You can customize this further by:
-- Adding screenshots
-- Including more detailed usage examples
-- Adding contribution guidelines
-- Expanding the troubleshooting section
-
-Would you like me to add any specific additional sections?
