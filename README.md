@@ -10,7 +10,7 @@ A full-stack hotel management application with Flask backend and HTML/CSS/JS fro
 - Booking system with date conflict checking
 - Customer management
 - Invoice generation
-- Admin and staff user roles
+- Admin and staff user based roles
 
 ## Technologies Used
 
